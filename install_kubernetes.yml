@@ -1,0 +1,50 @@
+---
+- name: Install Kubernetes and Deploy Pod on localhost
+  hosts: localhost
+  become: yes  # Run tasks with sudo
+
+  tasks:
+    - name: Install required packages
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - docker
+        - kubelet
+        - kubeadm
+        - kubectl
+        - kubernetes-cni
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Initialize Kubernetes cluster
+      command: kubeadm init --apiserver-advertise-address=127.0.0.1 --pod-network-cidr=192.168.0.0/16
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Copy kubeconfig to user's home directory
+      command: cp /etc/kubernetes/admin.conf /home/{{ ansible_user }}/admin.conf
+      args:
+        creates: /home/{{ ansible_user }}/admin.conf
+
+    - name: Set kubectl config for regular user
+      copy:
+        src: /home/{{ ansible_user }}/admin.conf
+        dest: /home/{{ ansible_user }}/.kube/config
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0600
+
+    - name: Deploy Pod using kubectl
+      command: kubectl apply -f /path/to/your/pod.yaml
+      args:
+        creates: /path/to/your/pod.yaml
+
+    - name: Install flannel network plugin
+      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      args:
+        creates: /etc/kubernetes/manifests/kube-flannel.yml
